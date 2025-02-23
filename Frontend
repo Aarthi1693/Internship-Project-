@@ -1,0 +1,224 @@
+Authentication Context (src/context/AuthContext.js)
+
+import { createContext, useState, useEffect } from 'react';
+import jwtDecode from 'jwt-decode';
+
+const AuthContext = createContext();
+
+export const AuthProvider = ({ children }) => {
+    const [user, setUser] = useState(null);
+
+    useEffect(() => {
+        const token = localStorage.getItem('token');
+        if (token) {
+            setUser(jwtDecode(token));
+        }
+    }, []);
+
+    const login = (token) => {
+        localStorage.setItem('token', token);
+        setUser(jwtDecode(token));
+    };
+
+    const logout = () => {
+        localStorage.removeItem('token');
+        setUser(null);
+    };
+
+    return (
+        <AuthContext.Provider value={{ user, login, logout }}>
+            {children}
+        </AuthContext.Provider>
+    );
+};
+
+export default AuthContext;
+
+
+---
+
+2. Navbar Component (src/components/Navbar.js)
+
+import { Link } from 'react-router-dom';
+import { useContext } from 'react';
+import AuthContext from '../context/AuthContext';
+
+const Navbar = () => {
+    const { user, logout } = useContext(AuthContext);
+
+    return (
+        <nav>
+            <Link to="/">Home</Link>
+            {user ? (
+                <>
+                    <Link to="/create-auction">Create Auction</Link>
+                    <button onClick={logout}>Logout</button>
+                </>
+            ) : (
+                <>
+                    <Link to="/login">Login</Link>
+                    <Link to="/register">Register</Link>
+                </>
+            )}
+        </nav>
+    );
+};
+
+export default Navbar;
+
+
+---
+
+3. Home Page (src/pages/Home.js)
+
+import { useState, useEffect } from 'react';
+import axios from 'axios';
+import AuctionCard from '../components/AuctionCard';
+
+const Home = () => {
+    const [auctions, setAuctions] = useState([]);
+
+    useEffect(() => {
+        axios.get('http://localhost:5000/api/auctions')
+            .then(res => setAuctions(res.data))
+            .catch(err => console.log(err));
+    }, []);
+
+    return (
+        <div>
+            <h1>Live Auctions</h1>
+            {auctions.map(auction => (
+                <AuctionCard key={auction._id} auction={auction} />
+            ))}
+        </div>
+    );
+};
+
+export default Home;
+
+
+---
+
+4. Auction Card Component (src/components/AuctionCard.js)
+
+import { Link } from 'react-router-dom';
+
+const AuctionCard = ({ auction }) => {
+    return (
+        <div>
+            <h3>{auction.title}</h3>
+            <p>Current Bid: ${auction.currentBid}</p>
+            <Link to={`/auction/${auction._id}`}>View Auction</Link>
+        </div>
+    );
+};
+
+export default AuctionCard;
+
+
+---
+
+5. Login Page (src/pages/Login.js)
+
+import { useState, useContext } from 'react';
+import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
+import AuthContext from '../context/AuthContext';
+
+const Login = () => {
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const { login } = useContext(AuthContext);
+    const navigate = useNavigate();
+
+    const handleLogin = async (e) => {
+        e.preventDefault();
+        try {
+            const res = await axios.post('http://localhost:5000/api/auth/login', { email, password });
+            login(res.data.token);
+            navigate('/');
+        } catch (error) {
+            console.error(error.response.data);
+        }
+    };
+
+    return (
+        <form onSubmit={handleLogin}>
+            <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <button type="submit">Login</button>
+        </form>
+    );
+};
+
+export default Login;
+
+
+---
+
+6. Create Auction Page (src/pages/CreateAuction.js)
+
+import { useState } from 'react';
+import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
+
+const CreateAuction = () => {
+    const [title, setTitle] = useState('');
+    const [description, setDescription] = useState('');
+    const [startingBid, setStartingBid] = useState('');
+    const [endTime, setEndTime] = useState('');
+    const navigate = useNavigate();
+
+    const handleCreate = async (e) => {
+        e.preventDefault();
+        try {
+            await axios.post('http://localhost:5000/api/auctions/create', { title, description, startingBid, endTime });
+            navigate('/');
+        } catch (error) {
+            console.error(error.response.data);
+        }
+    };
+
+    return (
+        <form onSubmit={handleCreate}>
+            <input type="text" placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
+            <textarea placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
+            <input type="number" placeholder="Starting Bid" value={startingBid} onChange={(e) => setStartingBid(e.target.value)} />
+            <input type="datetime-local" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+            <button type="submit">Create Auction</button>
+        </form>
+    );
+};
+
+export default CreateAuction;
+
+
+---
+
+7. Main App Component (src/App.js)
+
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
+import Navbar from './components/Navbar';
+import Home from './pages/Home';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import CreateAuction from './pages/CreateAuction';
+
+const App = () => {
+    return (
+        <AuthProvider>
+            <Router>
+                <Navbar />
+                <Routes>
+                    <Route path="/" element={<Home />} />
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/register" element={<Register />} />
+                    <Route path="/create-auction" element={<CreateAuction />} />
+                </Routes>
+            </Router>
+        </AuthProvider>
+    );
+};
+
+export default App;
